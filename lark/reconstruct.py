@@ -1,16 +1,22 @@
 """This is an experimental tool for reconstructing text from a shaped tree, based on a Lark grammar.
 """
 
-from typing import Dict, Callable, Iterable, Optional
+from typing import Dict, Callable, Iterable, NamedTuple, Optional
 
 from .lark import Lark
 from .tree import Tree, ParseTree
 from .visitors import Transformer_InPlace
 from .lexer import Token, PatternStr, TerminalDef
-from .grammar import Terminal, NonTerminal, Symbol
+from .grammar import Terminal, Symbol
 
-from .tree_matcher import TreeMatcher, is_discarded_terminal
+from .tree_matcher import TreeMatcher, is_discarded_terminal, parse_rulename
 from .utils import is_id_continue
+
+
+class _ReconstructTree(NamedTuple):
+    tree: Tree
+    rulename: str
+
 
 def is_iter_empty(i):
     try:
@@ -55,7 +61,10 @@ class WriteTokensTransformer(Transformer_InPlace):
                     if isinstance(x, Token):
                         assert Terminal(x.type) == sym, x
                     else:
-                        assert NonTerminal(x.data) == sym, (sym, x)
+                        name, _args = parse_rulename(sym.name)
+                        assert x.data == name, (sym, x)
+                        if name != sym.name:
+                            x = _ReconstructTree(x, sym.name)
                     to_write.append(x)
 
         assert is_iter_empty(iter_args)
@@ -82,13 +91,14 @@ class Reconstructor(TreeMatcher):
 
         self.write_tokens = WriteTokensTransformer({t.name:t for t in self.tokens}, term_subs or {})
 
-    def _reconstruct(self, tree):
-        unreduced_tree = self.match_tree(tree, tree.data)
+    def _reconstruct(self, tree, rulename=None):
+        unreduced_tree = self.match_tree(tree, rulename or tree.data)
 
         res = self.write_tokens.transform(unreduced_tree)
         for item in res:
-            if isinstance(item, Tree):
-                # TODO use orig_expansion.rulename to support templates
+            if isinstance(item, _ReconstructTree):
+                yield from self._reconstruct(item.tree, item.rulename)
+            elif isinstance(item, Tree):
                 yield from self._reconstruct(item)
             else:
                 yield item

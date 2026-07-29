@@ -101,6 +101,16 @@ class TestReconstructor(TestCase):
         for c in code:
             self.assert_reconstruct(g, c)
 
+    def test_template_rule(self):
+        g = """
+        start: "[" sep{item, COMMA} "]"
+        sep{x, delimiter}: x (delimiter x)*
+        item: WORD
+        COMMA: ","
+        """ + common
+
+        self.assert_reconstruct(g, "[one,two]")
+
     def test_json_example(self):
         test_json = '''
             {
