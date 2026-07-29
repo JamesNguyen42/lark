@@ -192,6 +192,9 @@ SMALL_FACTOR_THRESHOLD = 5
 # while not being to overaggressive and unnecessarily creating rules that might create shift/reduce conflicts.
 # (See PR #949)
 REPEAT_BREAK_THRESHOLD = 50
+# Inline ordinary optionals as before, but use helper rules once their Cartesian
+# product would create more than this many BNF expansions.
+OPTIONAL_BREAK_THRESHOLD = 256
 
 
 class FindRuleSize(Transformer):
@@ -254,6 +257,19 @@ class EBNF_to_BNF(Transformer_InPlace):
                 ST('expansion', [t, expr])
             ])
             return self._add_rule(expr, new_name, tree)
+
+    def _add_optional_rule(self, expansions: Tree):
+        keep_all_tokens = bool(self.rule_options and self.rule_options.keep_all_tokens)
+        key = ('optional', keep_all_tokens, expansions)
+        try:
+            return self.rules_cache[key]
+        except KeyError:
+            new_name = self._name_rule('optional')
+            normalized = ST('expansions', [
+                child if isinstance(child, Tree) else ST('expansion', [child])
+                for child in expansions.children
+            ])
+            return self._add_rule(key, new_name, normalized)
 
     def _add_repeat_rule(self, a, b, target, atom):
         """Generate a rule that repeats target ``a`` times, and repeats atom ``b`` times.
@@ -371,6 +387,40 @@ class EBNF_to_BNF(Transformer_InPlace):
             return self._generate_repeats(rule, mn, mx)
 
         assert False, op
+
+    def expansion(self, *items):
+        for item in items:
+            if isinstance(item, Tree) and item.data == 'expansions':
+                while item.expand_kids_by_data('expansions'):
+                    pass
+
+        alternatives = [
+            (len(item.children), i, item)
+            for i, item in enumerate(items)
+            if isinstance(item, Tree)
+            and item.data == 'expansions'
+            and all(not isinstance(child, Tree) or child.data == 'expansion' for child in item.children)
+            and any(
+                isinstance(child, Tree)
+                and child.data == 'expansion'
+                and (not child.children or all(grandchild is _EMPTY for grandchild in child.children))
+                for child in item.children
+            )
+        ]
+        expansion_count = 1
+        for size, _i, _item in alternatives:
+            expansion_count *= size
+
+        if expansion_count <= OPTIONAL_BREAK_THRESHOLD:
+            return ST('expansion', list(items))
+
+        items = list(items)
+        for size, i, item in sorted(alternatives, reverse=True):
+            items[i] = self._add_optional_rule(item)
+            expansion_count //= size
+            if expansion_count <= OPTIONAL_BREAK_THRESHOLD:
+                break
+        return ST('expansion', items)
 
     def maybe(self, rule: Tree):
         keep_all_tokens = self.rule_options and self.rule_options.keep_all_tokens

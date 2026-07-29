@@ -289,6 +289,23 @@ class TestGrammar(TestCase):
         self.assertRaises(UnexpectedInput, l.parse, u'A' * 8190)
         self.assertRaises(UnexpectedInput, l.parse, u'A' * 8192)
 
+    def test_many_optionals_do_not_expand_combinatorially(self):
+        names = list("ABCDEFGHIJ")
+        terminals = "\n".join(f'{name}: "{name.lower()}"' for name in names)
+
+        for optional in ("{}?", "[{}]"):
+            grammar = "start: " + " ".join(optional.format(name) for name in names) + "\n" + terminals
+            parser = Lark(grammar, parser="lalr", maybe_placeholders=True)
+
+            self.assertLess(len(parser.rules), 512)
+            self.assertEqual(parser.parse("abcdefghij").children, list("abcdefghij"))
+            expected = (
+                list("acegi")
+                if optional == "{}?"
+                else ["a", None, "c", None, "e", None, "g", None, "i", None]
+            )
+            self.assertEqual(parser.parse("acegi").children, expected)
+
     def test_large_terminal(self):
         g = "start: NUMBERS\n"
         g += "NUMBERS: " + '|'.join('"%s"' % i for i in range(0, 1000))
