@@ -681,13 +681,28 @@ class Grammar(Serialize):
     term_defs: List[Tuple[str, Tuple[Tree, int]]]
     rule_defs: List[Tuple[str, Tuple[str, ...], Tree, RuleOptions]]
     ignore: List[str]
+    terminals_used_by_terminals: List[str]
 
-    def __init__(self, rule_defs: List[Tuple[str, Tuple[str, ...], Tree, RuleOptions]], term_defs: List[Tuple[str, Tuple[Tree, int]]], ignore: List[str]) -> None:
+    def __init__(
+        self,
+        rule_defs: List[Tuple[str, Tuple[str, ...], Tree, RuleOptions]],
+        term_defs: List[Tuple[str, Tuple[Tree, int]]],
+        ignore: List[str],
+        terminals_used_by_terminals: Optional[List[str]] = None,
+    ) -> None:
         self.term_defs = term_defs
         self.rule_defs = rule_defs
         self.ignore = ignore
+        self.terminals_used_by_terminals = terminals_used_by_terminals or []
 
-    __serialize_fields__ = 'term_defs', 'rule_defs', 'ignore'
+    __serialize_fields__ = 'term_defs', 'rule_defs', 'ignore', 'terminals_used_by_terminals'
+
+    @classmethod
+    def deserialize(cls, data, memo):
+        if 'terminals_used_by_terminals' not in data:
+            data = dict(data)
+            data['terminals_used_by_terminals'] = []
+        return super().deserialize(data, memo)
 
     def compile(self, start, terminals_to_keep) -> Tuple[List[TerminalDef], List[Rule], List[str]]:
         # We change the trees in-place (to support huge grammars)
@@ -811,8 +826,9 @@ class Grammar(Serialize):
                                  for t in r.expansion
                                  if isinstance(t, Terminal)}
             terminals, unused = classify_bool(terminals, lambda t: t.name in used_terms or t.name in self.ignore or t.name in terminals_to_keep)
-            if unused:
-                logger.debug("Unused terminals: %s", [t.name for t in unused])
+            unused_names = [t.name for t in unused if t.name not in self.terminals_used_by_terminals]
+            if unused_names:
+                logger.debug("Unused terminals: %s", unused_names)
 
         return terminals, compiled_rules, self.ignore
 
@@ -1084,6 +1100,7 @@ class Definition:
         self.tree = tree
         self.params = tuple(params)
         self.options = options
+        self.term_references = _find_used_symbols(tree) if is_term and tree is not None else set()
 
 class GrammarBuilder:
 
@@ -1158,6 +1175,8 @@ class GrammarBuilder:
 
         assert isinstance(base, Tree) and base.data == 'expansions'
         base.children.insert(0, exp)
+        if is_term:
+            d.term_references.update(_find_used_symbols(exp))
 
     def _ignore(self, exp_or_name):
         if isinstance(exp_or_name, str):
@@ -1380,6 +1399,13 @@ class GrammarBuilder:
         self.validate()
         rule_defs = []
         term_defs = []
+        terminals_used_by_terminals = sorted({
+            reference
+            for definition in self._definitions.values()
+            if definition.is_term
+            for reference in definition.term_references
+            if reference in self._definitions and self._definitions[reference].is_term
+        })
         for name, d in self._definitions.items():
             (params, exp, options) = d.params, d.tree, d.options
             if d.is_term:
@@ -1388,7 +1414,7 @@ class GrammarBuilder:
             else:
                 rule_defs.append((name, params, exp, options))
         # resolve_term_references(term_defs)
-        return Grammar(rule_defs, term_defs, self._ignore_names)
+        return Grammar(rule_defs, term_defs, self._ignore_names, terminals_used_by_terminals)
 
 
 def verify_used_files(file_hashes):

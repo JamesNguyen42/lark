@@ -4,13 +4,21 @@ import os
 from unittest import TestCase, main
 
 from lark import Lark, Token, Tree, ParseError, UnexpectedInput
-from lark.load_grammar import GrammarError, GRAMMAR_ERRORS, find_grammar_errors, list_grammar_imports
+from lark.load_grammar import Grammar, GrammarError, GRAMMAR_ERRORS, find_grammar_errors, list_grammar_imports
 from lark.load_grammar import FromPackageLoader
 from lark.grammar import Symbol
 
 class TestGrammar(TestCase):
     def setUp(self):
         pass
+
+    def test_deserialize_grammar_without_terminal_references(self):
+        serialized = Grammar([], [], []).serialize()
+        del serialized['terminals_used_by_terminals']
+
+        grammar = Grammar.deserialize(serialized, {})
+
+        self.assertEqual(grammar.terminals_used_by_terminals, [])
 
     def test_errors(self):
         for msg, examples in GRAMMAR_ERRORS:

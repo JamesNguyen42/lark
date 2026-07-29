@@ -50,6 +50,56 @@ class Testlogger(TestCase):
         # no log message
         self.assertEqual(log, "")
 
+    def test_terminal_references_are_not_reported_as_unused(self):
+        logger.setLevel(logging.DEBUG)
+        grammar = r"""
+        value: IDENTIFIER
+        _IDENT_LETTER: "A".."Z"
+        DECIMAL_DIGIT: "0".."9"
+        IDENTIFIER: _IDENT_LETTER (_IDENT_LETTER | DECIMAL_DIGIT)+
+        UNUSED: "unused"
+        """
+        with capture_log() as log:
+            parser = Lark(grammar, start="value", parser="lalr", debug=True)
+
+        self.assertEqual(str(parser.parse("E2BIG").children[0]), "E2BIG")
+        log = log.getvalue()
+        self.assertIn("UNUSED", log)
+        self.assertNotIn("_IDENT_LETTER", log)
+        self.assertNotIn("DECIMAL_DIGIT", log)
+
+    def test_terminal_reference_tracking_respects_override_and_extend(self):
+        logger.setLevel(logging.DEBUG)
+        cases = [
+            (
+                """
+                start: COMPOSITE
+                FRAGMENT: "fragment"
+                COMPOSITE: FRAGMENT
+                %override COMPOSITE: "composite"
+                """,
+                "FRAGMENT",
+            ),
+            (
+                """
+                start: COMPOSITE
+                FRAGMENT: "fragment"
+                COMPOSITE: "composite"
+                %extend COMPOSITE: FRAGMENT
+                """,
+                None,
+            ),
+        ]
+
+        for grammar, expected_unused in cases:
+            with self.subTest(expected_unused=expected_unused), capture_log() as log:
+                Lark(grammar, parser="lalr", debug=True)
+
+            if expected_unused is None:
+                self.assertEqual(log.getvalue(), "")
+            else:
+                self.assertIn(expected_unused, log.getvalue())
+
     def test_loglevel_higher(self):
         logger.setLevel(logging.ERROR)
         collision_grammar = '''
