@@ -228,6 +228,30 @@ invalid_match_statements = [
 ]
 
 
+valid_parenthesized_with_statements = [
+    textwrap.dedent("""
+    with (open("a.txt") as a,
+          open("b.txt") as b):
+        pass
+    """),
+
+    textwrap.dedent("""
+    with (open("a.txt") as a,):
+        pass
+    """),
+
+    textwrap.dedent("""
+    with (manager as value):
+        pass
+    """),
+
+    textwrap.dedent("""
+    with (lock, open("a.txt") as handle):
+        pass
+    """),
+]
+
+
 class TestPythonParser(TestCase):
     @classmethod
     def setUpClass(cls):
@@ -292,6 +316,38 @@ class TestPythonParser(TestCase):
         for case in invalid_match_statements:
             with self.assertRaises(ParseError):
                 self.python_parser.parse(case, start="file_input")
+
+    def test_valid_parenthesized_with_statement(self):
+        for case in valid_parenthesized_with_statements:
+            self._test_parsed_is_file_containing_only_this_statement(case, "with_stmt")
+
+    def test_parenthesized_with_statement_tree(self):
+        equivalents = [
+            (
+                "with (a, b):\n    pass\n",
+                "with a, b:\n    pass\n",
+            ),
+            (
+                "async with (a as x, b as y):\n    pass\n",
+                "async with a as x, b as y:\n    pass\n",
+            ),
+        ]
+
+        for parenthesized, unparenthesized in equivalents:
+            self.assertEqual(
+                self.python_parser.parse(parenthesized, start="file_input"),
+                self.python_parser.parse(unparenthesized, start="file_input"),
+            )
+
+    def test_parenthesized_tuple_with_item(self):
+        tree = self.python_parser.parse("with ((a, b)):\n    pass\n", start="file_input")
+        with_statement = tree.children[0]
+        with_items = with_statement.children[0]
+
+        self.assertEqual(with_statement.data, "with_stmt")
+        self.assertEqual(with_items.data, "with_items")
+        self.assertEqual(len(with_items.children), 1)
+        self.assertEqual(with_items.children[0].children[0].data, "tuple")
 
     def test_assign_to_variable_named_match(self):
         text = textwrap.dedent("""

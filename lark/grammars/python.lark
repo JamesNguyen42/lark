@@ -101,8 +101,12 @@ except_clause: "except" [test ["as" name]] ":" suite
 
 
 with_stmt: "with" with_items ":" suite
+         | "with" "(" parenthesized_with_items ")" ":" suite
 with_items: with_item ("," with_item)*
 with_item: test ["as" name]
+parenthesized_with_items: parenthesized_with_item ("," parenthesized_with_item)* ","? -> with_items
+// Prefer with-item separation over tuple parsing inside the outer parentheses.
+parenthesized_with_item.2: test ["as" name] -> with_item
 
 match_stmt: "match" test ":" _NEWLINE _INDENT case+ _DEDENT
 
