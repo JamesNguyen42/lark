@@ -156,8 +156,8 @@ RULES = {
     'range': ['STRING _DOTDOT STRING'],
 
     'template_usage': ['nonterminal _LBRACE _template_args _RBRACE'],
-    '_template_args': ['value',
-                       '_template_args _COMMA value'],
+    '_template_args': ['expansions',
+                       '_template_args _COMMA expansions'],
 
     'term': ['TERMINAL _COLON expansions _NL',
              'TERMINAL _DOT NUMBER _COLON expansions _NL'],
@@ -517,10 +517,38 @@ class ApplyTemplates(Transformer_InPlace):
         self.rule_defs = rule_defs
         self.replacer = _ReplaceSymbols()
         self.created_templates = set()
+        self.template_args = {}
+
+    def _prepare_template_arg(self, arg):
+        while isinstance(arg, Tree) and arg.data in ('expansions', 'expansion') and len(arg.children) == 1:
+            arg, = arg.children
+
+        if isinstance(arg, Symbol):
+            return arg
+
+        assert isinstance(arg, Tree) and arg.data == 'expansions', arg
+        key = repr(arg)
+        try:
+            return self.template_args[key]
+        except KeyError:
+            pass
+
+        existing_names = {name for name, _params, _tree, _options in self.rule_defs}
+        i = len(self.template_args)
+        while True:
+            name = '__template_arg_%d' % i
+            if name not in existing_names:
+                break
+            i += 1
+
+        symbol = NonTerminal(name)
+        self.template_args[key] = symbol
+        self.rule_defs.append((name, [], deepcopy(arg), None))
+        return symbol
 
     def template_usage(self, c):
         name = c[0].name
-        args = c[1:]
+        args = [self._prepare_template_arg(arg) for arg in c[1:]]
         result_name = "%s{%s}" % (name, ",".join(a.name for a in args))
         if result_name not in self.created_templates:
             self.created_templates.add(result_name)

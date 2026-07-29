@@ -1509,6 +1509,15 @@ def _make_parser_test(LEXER, PARSER):
             x = g.parse("[1]")
             self.assertSequenceEqual(x.children, [Tree('sep', ['1'])])
 
+        def test_templates_with_rule_arguments(self):
+            for item in ('"a" | "b"', '("a" | "b")'):
+                g = _Lark(r"""
+                           start: "[" _sep{%s, ","} "]"
+                           _sep{item, delim}: item (delim item)*
+                           """ % item)
+                g.parse("[a,b,a]")
+                g.parse("[b]")
+
         def test_templates_recursion(self):
             g = _Lark(r"""
                        start: "[" _sep{NUMBER, ","} "]"

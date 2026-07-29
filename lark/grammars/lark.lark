@@ -39,7 +39,7 @@ name_list: "(" name ("," name)* ")"
 ?value: STRING ".." STRING -> literal_range
       | name
       | (REGEXP | STRING) -> literal
-      | name "{" value ("," value)* "}" -> template_usage
+      | name "{" expansions ("," expansions)* "}" -> template_usage
 
 name: RULE
     | TOKEN
