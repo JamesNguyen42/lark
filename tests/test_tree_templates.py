@@ -143,16 +143,20 @@ class TestTreeTemplatesTemplate(unittest.TestCase):
             with self.subTest(msg=description):
                 self.assertIsNone(template.match(test_case))
 
-    def test_template_search__same_tree_no_template__empty_generator(self):
-        template = Template(SOME_NON_TEMPLATE_TREE, conf=self.conf)
-
-        self.assertEqual([], list(template.search(SOME_NON_TEMPLATE_TREE)))
-
-    def test_template_search__same_tree_as_child__empty_generator(self):
+    def test_template_search__same_tree_no_template__matched_result(self):
         template = Template(SOME_NON_TEMPLATE_TREE, conf=self.conf)
 
         self.assertEqual(
-            [], list(template.search(Tree("root", children=[SOME_NON_TEMPLATE_TREE])))
+            [(SOME_NON_TEMPLATE_TREE, {})],
+            list(template.search(SOME_NON_TEMPLATE_TREE)),
+        )
+
+    def test_template_search__same_tree_as_child__matched_result(self):
+        template = Template(SOME_NON_TEMPLATE_TREE, conf=self.conf)
+
+        self.assertEqual(
+            [(SOME_NON_TEMPLATE_TREE, {})],
+            list(template.search(Tree("root", children=[SOME_NON_TEMPLATE_TREE]))),
         )
 
     def test_template_search__with_template__matched_result_with_parent_tree(self):
