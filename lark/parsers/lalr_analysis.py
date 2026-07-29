@@ -46,7 +46,7 @@ class ParseTableBase(Generic[StateT]):
 
         states = {
             state: {tokens.get(token): ((1, arg.serialize(memo)) if action is Reduce else (0, arg))
-                    for token, (action, arg) in actions.items()}
+                    for token, (action, arg) in sorted(actions.items())}
             for state, actions in self.states.items()
         }
 
@@ -80,11 +80,19 @@ class IntParseTable(ParseTableBase[int]):
 
     @classmethod
     def from_ParseTable(cls, parse_table: ParseTable):
-        enum = list(parse_table.states)
+        def get_transitions(state: State) -> Iterator[State]:
+            for _token, (action, target) in sorted(parse_table.states[state].items()):
+                if action is Shift:
+                    yield target
+
+        initial_states = (parse_table.start_states[start] for start in sorted(parse_table.start_states))
+        enum = list(bfs(initial_states, get_transitions))
+        assert len(enum) == len(parse_table.states)
         state_to_idx: Dict['State', int] = {s:i for i,s in enumerate(enum)}
         int_states = {}
 
-        for s, la in parse_table.states.items():
+        for s in enum:
+            la = parse_table.states[s]
             la = {k:(v[0], state_to_idx[v[1]]) if v[0] is Shift else v
                   for k,v in la.items()}
             int_states[ state_to_idx[s] ] = la

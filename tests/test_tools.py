@@ -3,6 +3,8 @@ from __future__ import absolute_import, print_function
 from unittest import TestCase, main
 
 from lark import Lark
+from lark.lexer import PatternRE
+from lark.parsers.lalr_analysis import IntParseTable, ParseTable, Shift
 from lark.tree import Tree
 from lark.tools import standalone
 
@@ -50,6 +52,32 @@ class TestStandalone(TestCase):
         _Lark = context['Lark_StandAlone']
         l = _Lark()
         x = l.parse('12 elephants')
+
+    def test_standalone_parse_table_order_is_stable(self):
+        transitions = {
+            'root': [('B', (Shift, 'right')), ('A', (Shift, 'left'))],
+            'left': [('C', (Shift, 'end'))],
+            'right': [('C', (Shift, 'end'))],
+            'end': [],
+        }
+
+        def parse_table(state_order, reverse_actions=False):
+            states = {}
+            for state in state_order:
+                actions = reversed(transitions[state]) if reverse_actions else transitions[state]
+                states[state] = dict(actions)
+            return ParseTable(states, {'start': 'root'}, {'start': 'end'})
+
+        first = IntParseTable.from_ParseTable(parse_table(['root', 'left', 'right', 'end']))
+        second = IntParseTable.from_ParseTable(parse_table(['end', 'right', 'left', 'root'], True))
+
+        self.assertEqual(repr(first.serialize(None)), repr(second.serialize(None)))
+
+    def test_standalone_pattern_flag_order_is_stable(self):
+        first = PatternRE('a', ('s', 'i')).serialize()
+        second = PatternRE('a', ('i', 's')).serialize()
+
+        self.assertEqual(repr(first), repr(second))
 
     def test_interactive(self):
         grammar = """
