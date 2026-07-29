@@ -12,6 +12,23 @@ Run using:
 python -m lark.tools.standalone
 ```
 
+You can also generate the module from a grammar string using the Python API:
+
+```python
+from pathlib import Path
+
+from lark import Lark
+
+parser = Lark('start: "hello"', parser="lalr")
+Path("standalone_parser.py").write_text(
+    parser.generate_standalone(),
+    encoding="utf-8",
+)
+```
+
+Pass `compress=True` to `generate_standalone()` to reduce the size of the
+serialized parser data in the generated module.
+
 For a play-by-play, read the [tutorial](http://blog.erezsh.com/create-a-stand-alone-lalr1-parser-in-python/)
 
 

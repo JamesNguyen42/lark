@@ -22,6 +22,36 @@ class TestStandalone(TestCase):
         exec(code, context)
         return context
 
+    def test_generate_standalone(self):
+        grammar = """
+            start: NUMBER WORD
+
+            %import common.NUMBER
+            %import common.WORD
+            %import common.WS
+            %ignore WS
+        """
+        parser = Lark(grammar, parser='lalr')
+
+        for compress in (False, True):
+            with self.subTest(compress=compress):
+                code_buf = StringIO()
+                standalone.gen_standalone(parser, out=code_buf, compress=compress)
+
+                code = parser.generate_standalone(compress=compress)
+                self.assertEqual(code, code_buf.getvalue())
+
+                context = {'__doc__': None, '__name__': 'test_standalone'}
+                exec(code, context)
+                standalone_parser = context['Lark_StandAlone']()
+                self.assertEqual(
+                    standalone_parser.parse('12 elephants'),
+                    Tree('start', ['12', 'elephants']),
+                )
+
+        with self.assertRaisesRegex(NotImplementedError, r"LALR\(1\)"):
+            Lark('start: "a"', parser='earley').generate_standalone()
+
     def test_simple(self):
         grammar = """
             start: NUMBER WORD

@@ -537,6 +537,27 @@ class Lark(Serialize, Generic[_Return_T]):
             data["options"] = {n: v for n, v in data["options"].items() if n not in exclude_options}
         pickle.dump({'data': data, 'memo': m}, f, protocol=pickle.HIGHEST_PROTOCOL)
 
+###}
+
+    def generate_standalone(self, compress: bool = False) -> str:
+        """Generate a stand-alone parser module for this LALR parser.
+
+        The returned string can be written to a Python file, or executed
+        directly. Set ``compress=True`` to reduce the size of the serialized
+        parser data in the generated module.
+        """
+        if self.options.parser != 'lalr':
+            raise NotImplementedError("Lark.generate_standalone() is only implemented for the LALR(1) parser.")
+
+        from io import StringIO
+        from .tools.standalone import gen_standalone
+
+        output = StringIO()
+        gen_standalone(self, out=output, compress=compress)
+        return output.getvalue()
+
+###{standalone
+
     @classmethod
     def load(cls: Type[_T], f) -> _T:
         """Loads an instance from the given file object
